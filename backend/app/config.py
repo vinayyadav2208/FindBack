@@ -81,6 +81,12 @@ class Settings:
         if origin.strip()
     ]
 
+    # Rate limiting (Phase 15 - security hardening)
+    RATE_LIMIT_ENABLED: bool = _get("RATE_LIMIT_ENABLED", "true").lower() in ("1", "true", "yes")
+    RATE_LIMIT_WINDOW_SECONDS: int = int(_get("RATE_LIMIT_WINDOW_SECONDS", "60"))
+    RATE_LIMIT_PER_MINUTE: int = int(_get("RATE_LIMIT_PER_MINUTE", "600"))
+    RATE_LIMIT_AUTH_PER_MINUTE: int = int(_get("RATE_LIMIT_AUTH_PER_MINUTE", "15"))
+
     # AI (all optional - application must keep working without them)
     GEMINI_API_KEY: str = _get("GEMINI_API_KEY", "")
     EMBEDDING_MODEL: str = _get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")

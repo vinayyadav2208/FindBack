@@ -12,10 +12,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import engine
+from app.middleware import RateLimitMiddleware, SecurityHeadersMiddleware
 from app.migrations import ensure_schema
 from app.routers import (
     admin,
@@ -79,6 +81,18 @@ async def log_requests(request: Request, call_next):
     logger.info("%s %s -> %s", request.method, request.url.path, response.status_code)
     return response
 
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    # Never leak stack traces or internals to clients (§40).
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+
+
+# Starlette applies the last-added middleware outermost, so SecurityHeaders
+# wraps RateLimit and even 429 responses carry the hardening headers.
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(home.router)
 app.include_router(auth.router)
