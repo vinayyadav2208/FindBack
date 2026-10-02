@@ -130,6 +130,19 @@ def serialize_notification(notification) -> dict:
     }
 
 
+def serialize_message(message) -> dict:
+    sender = getattr(message, "sender", None)
+    return {
+        "id": message.id,
+        "match_id": message.match_id,
+        "sender_id": message.sender_id,
+        "sender_name": sender.name if sender else None,
+        "body": message.body,
+        "is_read": bool(message.is_read),
+        "created_at": message.created_at.isoformat() if message.created_at else None,
+    }
+
+
 def serialize_report(report) -> dict:
     return {
         "id": report.id,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { MatchThread } from '../components/messages'
 import { EmptyState, ErrorBanner, Pagination, Spinner, SuccessBanner } from '../components/ui'
 import api, { errorMessage } from '../lib/api'
 import type { Match, Page } from '../lib/types'
@@ -19,25 +20,38 @@ export default function Matches() {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [openThread, setOpenThread] = useState<number | null>(null)
 
-  const load = useCallback(() => {
-    setLoading(true)
-    const params: Record<string, string | number> = { page, limit: 10 }
-    if (status) params.status = status
-    api
-      .get<Page<Match>>('/matches', { params })
-      .then(({ data: body }) => setData(body))
-      .catch((caught) => setError(errorMessage(caught)))
-      .finally(() => setLoading(false))
-  }, [page, status])
+  // showSpinner=true swaps the list for a spinner (filters/page changes);
+  // silent refresh keeps an open conversation mounted.
+  const fetchMatches = useCallback(
+    (showSpinner: boolean) => {
+      if (showSpinner) setLoading(true)
+      const params: Record<string, string | number> = { page, limit: 10 }
+      if (status) params.status = status
+      api
+        .get<Page<Match>>('/matches', { params })
+        .then(({ data: body }) => setData(body))
+        .catch((caught) => setError(errorMessage(caught)))
+        .finally(() => {
+          if (showSpinner) setLoading(false)
+        })
+    },
+    [page, status],
+  )
 
-  useEffect(load, [load])
+  const load = useCallback(() => fetchMatches(true), [fetchMatches])
+  const refresh = useCallback(() => fetchMatches(false), [fetchMatches])
+
+  useEffect(() => {
+    load()
+  }, [load])
 
   const updateStatus = async (matchId: number, next: string) => {
     try {
       const { data } = await api.put(`/matches/${matchId}/status`, { status: next })
       setNotice(data.message)
-      load()
+      refresh()
     } catch (caught) {
       setError(errorMessage(caught))
     }
@@ -142,6 +156,25 @@ export default function Matches() {
                     </select>
                   </div>
                 </div>
+
+                {/* Direct conversation between the finder and the loser */}
+                <div className="mt-3">
+                  <button
+                    type="button"
+                    className="btn-secondary"
+                    onClick={() => setOpenThread(openThread === match.id ? null : match.id)}
+                  >
+                    💬 Conversation
+                    {(match.unread_messages ?? 0) > 0 && (
+                      <span className="badge bg-teal-100 text-teal-700">
+                        {match.unread_messages} new
+                      </span>
+                    )}
+                  </button>
+                </div>
+                {openThread === match.id && (
+                  <MatchThread matchId={match.id} onChanged={refresh} />
+                )}
               </div>
             ))}
           </div>

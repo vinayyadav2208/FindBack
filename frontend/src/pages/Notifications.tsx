@@ -10,6 +10,7 @@ const typeDot: Record<string, string> = {
   CLAIM_REJECTED: 'bg-rose-500',
   DONATION_CLAIMED: 'bg-sky-500',
   LISTING_REPORTED: 'bg-orange-500',
+  MESSAGE_RECEIVED: 'bg-teal-500',
   SYSTEM: 'bg-slate-400',
 }
 

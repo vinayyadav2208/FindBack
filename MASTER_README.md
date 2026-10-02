@@ -2993,10 +2993,13 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 [✓] Background matching on create/update + manual rebuild endpoints
 [✓] Image matching (magic-byte validated uploads, /media static, identical-image score, optional CLIP)
 [✓] Notifications API (list, unread-count, read, read-all) + creation on matches/claims/reports
+[✓] Match messaging (GET/POST /matches/{id}/messages, /messages/read, GET /messages/unread-count;
+     parties-only access, MESSAGE_RECEIVED notification with snippet, auto-advance to CONTACTED,
+     per-match `unread_messages` badge on match lists)
 [✓] Reporting API (user-facing create/mine + admin queue/review)
 [✓] Admin API (stats, users suspend/activate/role, listings moderation, claims, reports, global rebuild)
 [✓] Rate limiting / security hardening (sliding window, auth bucket, security headers, JSON 500)
-[✓] Backend test suite (42 pytest tests against findback_test database)
+[✓] Backend test suite (47 pytest tests against findback_test database)
 [✓] Health endpoint (GET /health)
 ```
 
@@ -3014,7 +3017,9 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 [✓] Search & filters UI (unified search across lost/found/donation)
 [✓] Donations UI (list, filters, claim, create form)
 [✓] Matches UI (score breakdown, explanation + disclaimer, status updates)
-[✓] Notifications UI (unread badge, mark read / mark all read)
+[✓] Match conversation UI (per-match thread with unread "N new" badge, chat bubbles,
+     sender names, read receipts, reply box; opening a thread marks it read)
+[✓] Notifications UI (unread badge, mark read / mark all read; MESSAGE_RECEIVED type)
 [✓] Admin UI (stats, users moderation, listings, reports, claims; non-admin redirected)
 ```
 
@@ -3027,6 +3032,16 @@ middleware so 429 responses carry `Access-Control-Allow-Origin`; `X-RateLimit-Li
 to 429s and both headers exposed to browser JS; match-notification wording fix
 ("your lost/found item report"). `npm run build` green; pytest still 42/42.
 
+Match messaging (finder ↔ loser conversation) added and browser-verified end-to-end on
+2026-10-02 with two separate accounts: user B ("Priya Finder") posted a found item matching
+user A's lost report → AI paired them at 90% (status auto-advanced POTENTIAL → CONTACTED on
+B's first message), A's navbar badge rose with the MESSAGE_RECEIVED notification (snippet +
+which items the thread belongs to), the match card showed a "💬 Conversation 1 new" badge,
+opening the thread cleared the badge and rendered both sides' bubbles with sender names, and
+B's sent bubble gained a "· read" receipt after A opened the thread. pytest now 47/47
+(5 new message tests: notify + status advance, read/unread flow, 403 for non-participants /
+401 unauthenticated, empty-body 422, same-owner no-self-notify).
+
 ## Database (live `findback` schema)
 
 ```text
@@ -3038,6 +3053,7 @@ to 429s and both headers exposed to browser JS; match-notification wording fix
 [✓] matches (new)
 [✓] notifications (new)
 [✓] reports (new)
+[✓] messages (new — match conversations; FK → matches, users)
 ```
 
 ## Decisions log
@@ -3053,6 +3069,13 @@ to 429s and both headers exposed to browser JS; match-notification wording fix
 - **2026-10-02 — Response format:** list endpoints return `{items, total, page, limit, pages}`;
   mutations return `{message, ...}`; single-resource GET returns the resource object directly.
   Legacy response keys from the original implementation are preserved.
+- **2026-10-02 — Match messaging:** the spec has no messaging section; direct in-app
+  communication was added as a feature scoped to matches (the exact found↔lost pairing).
+  `messages` table created additively by `ensure_schema`; only the two match parties (and
+  admins) can read/write a thread; `is_read` means "read by the recipient"; the first message
+  advances POTENTIAL/VIEWED → CONTACTED (never downgrades settled statuses); each message
+  creates a MESSAGE_RECEIVED notification whose navbar badge needs no frontend change.
+  Claims keep their structured communication (message + verification answers + review note).
 
 ---
 

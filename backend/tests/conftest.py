@@ -49,6 +49,7 @@ from app.models import (  # noqa: E402
     FoundItem,
     LostItem,
     Match,
+    Message,
     Notification,
     Report,
     User,
@@ -109,6 +110,13 @@ def _purge_user(db, user: User) -> None:
         (FoundItem, Match.found_item_id, C.CLAIM_ITEM_FOUND),
     ):
         for item in db.query(model).filter(model.user_id == user.id).all():
+            match_ids = [
+                row[0] for row in db.query(Match.id).filter(match_column == item.id).all()
+            ]
+            if match_ids:
+                db.query(Message).filter(Message.match_id.in_(match_ids)).delete(
+                    synchronize_session=False
+                )
             db.query(Match).filter(match_column == item.id).delete(synchronize_session=False)
             db.query(Claim).filter(
                 Claim.item_type == claim_type, Claim.item_id == item.id
@@ -120,6 +128,7 @@ def _purge_user(db, user: User) -> None:
         ).delete(synchronize_session=False)
         db.delete(item)
     db.query(Notification).filter(Notification.user_id == user.id).delete(synchronize_session=False)
+    db.query(Message).filter(Message.sender_id == user.id).delete(synchronize_session=False)
     db.query(Report).filter(Report.reporter_id == user.id).delete(synchronize_session=False)
     db.query(Report).filter(
         Report.target_type == C.REPORT_TARGET_USER, Report.target_id == user.id

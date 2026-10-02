@@ -264,6 +264,10 @@ class MatchStatusUpdate(BaseModel):
         return value
 
 
+class MessageCreate(BaseModel):
+    body: str = Field(..., min_length=1, max_length=2000)
+
+
 class MatchOut(BaseModel):
     id: int
     lost_item_id: int

@@ -233,6 +233,30 @@ class Match(Base):
     found_item = relationship("FoundItem")
 
 
+class Message(Base):
+    """In-app conversation between the two parties of a match.
+
+    Lets the person who lost an item and the person who found it talk directly
+    to arrange a handover instead of relying on out-of-band contact. Only the
+    two parties (and admins) can read a thread; `is_read` tracks whether the
+    *recipient* has read the message.
+    """
+
+    __tablename__ = "messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, index=True)
+    sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    body = Column(Text, nullable=False)
+    is_read = Column(Boolean, nullable=False, default=False, server_default="0")
+    created_at = Column(
+        DateTime, nullable=False, default=_now, server_default=func.current_timestamp(), index=True
+    )
+
+    match = relationship("Match")
+    sender = relationship("User")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
 

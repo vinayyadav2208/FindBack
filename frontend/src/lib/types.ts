@@ -83,6 +83,17 @@ export interface Match {
   combined_score: number
   status: string
   explanation: MatchExplanation | null
+  unread_messages?: number
+  created_at?: string
+}
+
+export interface Message {
+  id: number
+  match_id: number
+  sender_id: number
+  sender_name: string | null
+  body: string
+  is_read: boolean
   created_at?: string
 }
 
