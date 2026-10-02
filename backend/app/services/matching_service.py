@@ -241,7 +241,7 @@ def _notify_match(db: Session, item, other, confidence: str, item_type: str) -> 
         title=f"Potential {other_kind} item match for '{item.name}'",
         message=(
             f"{confidence}: a {other_kind} listing ('{other.name}') looks similar to your "
-            f"lost {kind} item report. {other.location}. Open Matches to review why - "
+            f"{kind} item report. {other.location}. Open Matches to review why - "
             "always verify ownership before arranging a handover."
         ),
     )

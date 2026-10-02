@@ -109,7 +109,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                         else "Too many requests. Please slow down."
                     )
                 },
-                headers={"Retry-After": str(retry_after)},
+                headers={
+                    "Retry-After": str(retry_after),
+                    "X-RateLimit-Limit": str(limit),
+                },
             )
 
         response = await call_next(request)

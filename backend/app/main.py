@@ -62,15 +62,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     try:
@@ -89,9 +80,20 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
-# Starlette applies the last-added middleware outermost, so SecurityHeaders
-# wraps RateLimit and even 429 responses carry the hardening headers.
+# Registration order: first added = innermost.  Logging is registered by the
+# decorator above, then RateLimit, then CORS (so 429 responses still carry
+# Access-Control-Allow-Origin), and SecurityHeaders last so it is outermost
+# and covers every response, including preflights and 429s.
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    # Let browser JS read rate-limit feedback on 429 responses.
+    expose_headers=["Retry-After", "X-RateLimit-Limit"],
+)
 app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(home.router)

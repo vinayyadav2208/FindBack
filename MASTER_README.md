@@ -3003,20 +3003,29 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 ## Frontend
 
 ```text
-[ ] React + TypeScript + Vite scaffold
-[ ] Tailwind CSS
-[ ] Routing + Navbar/Footer
-[ ] Auth context + Axios client + protected routes
-[ ] Home / Login / Register pages
-[ ] Dashboard
-[ ] Lost / Found listings + details + report forms
-[ ] My Listings / Profile
-[ ] Search & filters UI
-[ ] Donations UI
-[ ] Matches UI
-[ ] Notifications UI
-[ ] Admin UI
+[✓] React + TypeScript + Vite scaffold (npm run build passes: tsc -b + vite)
+[✓] Tailwind CSS (v4 via @tailwindcss/vite, shared .btn/.input/.card utilities)
+[✓] Routing + Navbar/Footer (19 pages, protected/admin routes, unread badge)
+[✓] Auth context + Axios client + protected routes (JWT localStorage, 401 auto-logout)
+[✓] Home / Login / Register pages (live stats, register+auto-login verified in browser)
+[✓] Dashboard (tabs: my lost / found / donations / claims with counts)
+[✓] Lost / Found listings + details + report forms (create verified: /lost/13, /found/8)
+[✓] My Listings / Profile (profile info, re-run AI matching, logout verified)
+[✓] Search & filters UI (unified search across lost/found/donation)
+[✓] Donations UI (list, filters, claim, create form)
+[✓] Matches UI (score breakdown, explanation + disclaimer, status updates)
+[✓] Notifications UI (unread badge, mark read / mark all read)
+[✓] Admin UI (stats, users moderation, listings, reports, claims; non-admin redirected)
 ```
+
+Browser-verified end-to-end on 2026-10-02 (Vite dev server + live backend): register →
+auto-login, protected routes, lost/found create (items /lost/13, /found/8), background AI
+match (91% score with explanation), notifications + unread badge, unified search,
+donations list, dashboard tabs, profile/logout, admin stats + suspend/activate roundtrip,
+non-admin → / redirect. Fixes found during UI testing: CORS now wraps the rate-limit
+middleware so 429 responses carry `Access-Control-Allow-Origin`; `X-RateLimit-Limit` added
+to 429s and both headers exposed to browser JS; match-notification wording fix
+("your lost/found item report"). `npm run build` green; pytest still 42/42.
 
 ## Database (live `findback` schema)
 

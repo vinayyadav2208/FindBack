@@ -18,6 +18,7 @@ dist/
 
 # Media uploads
 backend/media/
+backend/media_test/
 
 # AI vector indexes / caches
 *.faiss
