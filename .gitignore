@@ -1,0 +1,33 @@
+# Environment / secrets
+.env
+*.env.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Node / frontend
+node_modules/
+dist/
+.vite/
+
+# Media uploads
+backend/media/
+
+# AI vector indexes / caches
+*.faiss
+ai/embeddings/*.npy
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
