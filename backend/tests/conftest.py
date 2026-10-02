@@ -104,6 +104,28 @@ def admin(register):
 
 
 def _purge_user(db, user: User) -> None:
+    # messages.claim_id FK: clear every claim thread this user touches before
+    # the claims themselves disappear (claimant-side and item-side claims).
+    claim_ids = [
+        row[0] for row in db.query(Claim.id).filter(Claim.claimant_id == user.id).all()
+    ]
+    for model, claim_type in (
+        (LostItem, C.CLAIM_ITEM_LOST),
+        (FoundItem, C.CLAIM_ITEM_FOUND),
+        (Donation, C.CLAIM_ITEM_DONATION),
+    ):
+        owned = [row[0] for row in db.query(model.id).filter(model.user_id == user.id).all()]
+        if owned:
+            claim_ids.extend(
+                row[0]
+                for row in db.query(Claim.id)
+                .filter(Claim.item_type == claim_type, Claim.item_id.in_(owned))
+                .all()
+            )
+    if claim_ids:
+        db.query(Message).filter(Message.claim_id.in_(claim_ids)).delete(
+            synchronize_session=False
+        )
     db.query(Claim).filter(Claim.claimant_id == user.id).delete(synchronize_session=False)
     for model, match_column, claim_type in (
         (LostItem, Match.lost_item_id, C.CLAIM_ITEM_LOST),

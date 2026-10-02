@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
-import { MatchThread } from '../components/messages'
+import { Link, useLocation } from 'react-router-dom'
+import { Conversation } from '../components/messages'
 import { EmptyState, ErrorBanner, Pagination, Spinner, SuccessBanner } from '../components/ui'
 import api, { errorMessage } from '../lib/api'
 import type { Match, Page } from '../lib/types'
@@ -14,13 +14,18 @@ function confidenceColor(confidence: string): string {
 }
 
 export default function Matches() {
+  const location = useLocation()
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(1)
   const [data, setData] = useState<Page<Match> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [openThread, setOpenThread] = useState<number | null>(null)
+  // notification deep link: /matches?thread=15 opens that conversation
+  const [openThread, setOpenThread] = useState<number | null>(() => {
+    const thread = new URLSearchParams(location.search).get('thread')
+    return thread && !Number.isNaN(Number(thread)) ? Number(thread) : null
+  })
 
   // showSpinner=true swaps the list for a spinner (filters/page changes);
   // silent refresh keeps an open conversation mounted.
@@ -173,7 +178,7 @@ export default function Matches() {
                   </button>
                 </div>
                 {openThread === match.id && (
-                  <MatchThread matchId={match.id} onChanged={refresh} />
+                  <Conversation path={`/matches/${match.id}`} onChanged={refresh} />
                 )}
               </div>
             ))}

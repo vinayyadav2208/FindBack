@@ -12,10 +12,9 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import constants as C
 from app.dependencies import get_current_user, get_db
-from app.models import FoundItem, LostItem, Match, Message, User
+from app.models import Claim, Donation, FoundItem, LostItem, Match, Message, User
 from app.schemas import MatchStatusUpdate, MessageCreate
-from app.services import matching_service
-from app.services.notification_service import notify
+from app.services import matching_service, message_service
 from app.utils.helpers import page_payload, paginate, serialize_match, serialize_message
 
 router = APIRouter(tags=["Matches"])
@@ -50,19 +49,9 @@ def _load_match(db: Session, match_id: int) -> Match:
 
 def _unread_by_match(db: Session, user_id: int, match_ids: list[int]) -> dict[int, int]:
     """Unread incoming message count per match, for badge display."""
-    if not match_ids:
-        return {}
-    rows = (
-        db.query(Message.match_id, func.count(Message.id))
-        .filter(
-            Message.match_id.in_(match_ids),
-            Message.sender_id != user_id,
-            Message.is_read.is_(False),
-        )
-        .group_by(Message.match_id)
-        .all()
+    return message_service.unread_map(
+        db, user_id=user_id, column=Message.match_id, thread_ids=match_ids
     )
-    return {row[0]: row[1] for row in rows}
 
 
 @router.get("/matches", summary="Matches involving my listings")
@@ -178,10 +167,9 @@ def send_message(
     if not body:
         raise HTTPException(status_code=422, detail="Message body cannot be empty")
 
-    message = Message(match_id=match.id, sender_id=current_user.id, body=body)
-    db.add(message)
-    db.commit()
-    db.refresh(message)
+    message = message_service.create_message(
+        db, sender_id=current_user.id, match_id=match.id, body=body
+    )
 
     # The first message moves POTENTIAL/VIEWED matches to CONTACTED; settled
     # statuses (VERIFIED/REJECTED/RESOLVED) are never downgraded automatically.
@@ -191,23 +179,15 @@ def send_message(
         db.refresh(match)
 
     # Notify the other party - never the sender (an admin sender notifies both).
-    recipients = {
-        uid
-        for uid in (match.lost_item.user_id, match.found_item.user_id)
-        if uid != current_user.id
-    }
-    snippet = body if len(body) <= 120 else body[:117] + "..."
-    for recipient in recipients:
-        notify(
-            db,
-            user_id=recipient,
-            type=C.NOTIF_MESSAGE_RECEIVED,
-            title=f"New message from {current_user.name}",
-            message=(
-                f'"{snippet}" - open Matches for "{match.lost_item.name}" / '
-                f'"{match.found_item.name}" to reply.'
-            ),
-        )
+    message_service.notify_new_message(
+        db,
+        sender=current_user,
+        recipients={match.lost_item.user_id, match.found_item.user_id},
+        body=body,
+        context=f'Matches for "{match.lost_item.name}" / "{match.found_item.name}"',
+        related_type=C.RELATED_MATCH,
+        related_id=match.id,
+    )
 
     return {
         "message": "Message sent",
@@ -224,16 +204,9 @@ def mark_messages_read(
 ):
     match = _load_match(db, match_id)
     _require_party(db, match, current_user)
-    updated = (
-        db.query(Message)
-        .filter(
-            Message.match_id == match.id,
-            Message.sender_id != current_user.id,
-            Message.is_read.is_(False),
-        )
-        .update({"is_read": True}, synchronize_session=False)
+    updated = message_service.mark_read(
+        db, user_id=current_user.id, column=Message.match_id, thread_id=match.id
     )
-    db.commit()
     return {"message": f"Marked {updated} message(s) as read", "updated": updated}
 
 
@@ -249,12 +222,35 @@ def messages_unread_count(
         .filter(or_(Match.lost_item_id.in_(lost_ids), Match.found_item_id.in_(found_ids)))
         .all()
     ]
+    # claim threads: as the claimant, and as the owner of the claimed item
+    claim_ids = [
+        row[0]
+        for row in db.query(Claim.id).filter(Claim.claimant_id == current_user.id).all()
+    ]
+    for model, claim_type in (
+        (LostItem, C.CLAIM_ITEM_LOST),
+        (FoundItem, C.CLAIM_ITEM_FOUND),
+        (Donation, C.CLAIM_ITEM_DONATION),
+    ):
+        owned = [
+            row[0] for row in db.query(model.id).filter(model.user_id == current_user.id).all()
+        ]
+        if owned:
+            claim_ids.extend(
+                row[0]
+                for row in db.query(Claim.id)
+                .filter(Claim.item_type == claim_type, Claim.item_id.in_(owned))
+                .all()
+            )
+
     count = 0
-    if match_ids:
-        count = (
+    for column, thread_ids in ((Message.match_id, match_ids), (Message.claim_id, claim_ids)):
+        if not thread_ids:
+            continue
+        count += (
             db.query(func.count(Message.id))
             .filter(
-                Message.match_id.in_(match_ids),
+                column.in_(thread_ids),
                 Message.sender_id != current_user.id,
                 Message.is_read.is_(False),
             )

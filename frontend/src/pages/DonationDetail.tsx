@@ -36,7 +36,9 @@ export default function DonationDetail() {
         `/donations/${id}/claim`,
         { message: `${user?.name} would like to receive this donation.` },
       )
-      setNotice(`Request sent (${data.status}). The donor will review it.`)
+      setNotice(
+        `Request sent (${data.status}). Track it in Dashboard → Claims, where you can also message the donor.`,
+      )
       load()
     } catch (caught) {
       setError(errorMessage(caught))

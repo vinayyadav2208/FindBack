@@ -61,6 +61,7 @@ export interface Claim {
   verification_answers: Record<string, string> | null
   review_note: string | null
   status: string
+  unread_messages?: number
   created_at?: string
 }
 
@@ -89,7 +90,8 @@ export interface Match {
 
 export interface Message {
   id: number
-  match_id: number
+  match_id: number | null
+  claim_id: number | null
   sender_id: number
   sender_name: string | null
   body: string
@@ -102,6 +104,8 @@ export interface Notification {
   type: string
   title: string
   message: string | null
+  related_type: string | null
+  related_id: number | null
   is_read: boolean
   created_at?: string
 }

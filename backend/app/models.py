@@ -234,18 +234,21 @@ class Match(Base):
 
 
 class Message(Base):
-    """In-app conversation between the two parties of a match.
+    """Direct conversation between the two parties of a match or a claim.
 
-    Lets the person who lost an item and the person who found it talk directly
-    to arrange a handover instead of relying on out-of-band contact. Only the
-    two parties (and admins) can read a thread; `is_read` tracks whether the
-    *recipient* has read the message.
+    Lets the person who lost an item and the person who found it (or a donor
+    and someone who requested their donation) talk directly to arrange a
+    handover instead of relying on out-of-band contact. A message belongs to
+    exactly one thread: `match_id` XOR `claim_id`. Only the parties (and
+    admins) can read a thread; `is_read` tracks whether the *recipient* has
+    read the message.
     """
 
     __tablename__ = "messages"
 
     id = Column(Integer, primary_key=True, index=True)
-    match_id = Column(Integer, ForeignKey("matches.id"), nullable=False, index=True)
+    match_id = Column(Integer, ForeignKey("matches.id"), nullable=True, index=True)
+    claim_id = Column(Integer, ForeignKey("claims.id"), nullable=True, index=True)
     sender_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     body = Column(Text, nullable=False)
     is_read = Column(Boolean, nullable=False, default=False, server_default="0")
@@ -254,6 +257,7 @@ class Message(Base):
     )
 
     match = relationship("Match")
+    claim = relationship("Claim")
     sender = relationship("User")
 
 
@@ -265,6 +269,10 @@ class Notification(Base):
     type = Column(String(30), nullable=False, default=C.NOTIF_SYSTEM, server_default=C.NOTIF_SYSTEM)
     title = Column(String(200), nullable=False)
     message = Column(Text, nullable=True)
+    # Optional deep-link target: what this notification is ABOUT (MATCH/CLAIM/
+    # REPORT/USER + id) so the UI can navigate to the exact thread or record.
+    related_type = Column(String(30), nullable=True)
+    related_id = Column(Integer, nullable=True)
     is_read = Column(Boolean, nullable=False, default=False, server_default="0")
     created_at = Column(
         DateTime, nullable=False, default=_now, server_default=func.current_timestamp(), index=True

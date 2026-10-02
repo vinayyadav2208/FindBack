@@ -38,6 +38,8 @@ def _notify_admins(db: Session, report: Report) -> None:
             type=C.NOTIF_LISTING_REPORTED,
             title=f"New report: {report.reason.replace('_', ' ').title()}",
             message=f"A {report.target_type} listing was reported. Review it in the admin dashboard.",
+            related_type=C.RELATED_REPORT,
+            related_id=report.id,
         )
 
 

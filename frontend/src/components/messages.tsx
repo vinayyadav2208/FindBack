@@ -20,15 +20,17 @@ function formatTime(iso?: string): string {
 }
 
 /**
- * Conversation between the person who lost an item and the person who found
- * it, scoped to one match. Opening the thread marks incoming messages as read;
- * sending the first message advances the match to CONTACTED (server-side).
+ * Direct conversation between two parties of a match (finder <-> loser) or a
+ * claim (donor/owner <-> acceptor), rendered under the card it belongs to.
+ * `path` is the thread base: `/matches/15` or `/claims/8`. Opening the thread
+ * marks incoming messages as read; sending the first message notifies the
+ * other party (server-side).
  */
-export function MatchThread({
-  matchId,
+export function Conversation({
+  path,
   onChanged,
 }: {
-  matchId: number
+  path: string
   onChanged?: () => void
 }) {
   const { user } = useAuth()
@@ -45,12 +47,12 @@ export function MatchThread({
     setLoading(true)
     setError(null)
     try {
-      const first = await api.get<Page<Message>>(`/matches/${matchId}/messages`, {
+      const first = await api.get<Page<Message>>(`${path}/messages`, {
         params: { page: 1, limit: 100 },
       })
       const totalPages = first.data.pages || 1
       if (totalPages > 1) {
-        const last = await api.get<Page<Message>>(`/matches/${matchId}/messages`, {
+        const last = await api.get<Page<Message>>(`${path}/messages`, {
           params: { page: totalPages, limit: 100 },
         })
         setMessages(last.data.items)
@@ -59,7 +61,7 @@ export function MatchThread({
         setMessages(first.data.items)
         setPage(1)
       }
-      await api.post(`/matches/${matchId}/messages/read`)
+      await api.post(`${path}/messages/read`)
       onChanged?.()
     } catch (caught) {
       setError(errorMessage(caught))
@@ -71,7 +73,7 @@ export function MatchThread({
   const loadEarlier = async () => {
     if (page <= 1 || loading) return
     try {
-      const { data } = await api.get<Page<Message>>(`/matches/${matchId}/messages`, {
+      const { data } = await api.get<Page<Message>>(`${path}/messages`, {
         params: { page: page - 1, limit: 100 },
       })
       setMessages((prev) => [...data.items, ...prev])
@@ -84,7 +86,7 @@ export function MatchThread({
   useEffect(() => {
     void loadLatest()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId])
+  }, [path])
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
@@ -96,7 +98,7 @@ export function MatchThread({
     if (!body || sending) return
     setSending(true)
     try {
-      await api.post(`/matches/${matchId}/messages`, { body })
+      await api.post(`${path}/messages`, { body })
       setDraft('')
       await loadLatest()
     } catch (caught) {

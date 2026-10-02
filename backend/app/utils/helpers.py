@@ -125,6 +125,8 @@ def serialize_notification(notification) -> dict:
         "type": notification.type,
         "title": notification.title,
         "message": notification.message,
+        "related_type": notification.related_type,
+        "related_id": notification.related_id,
         "is_read": bool(notification.is_read),
         "created_at": notification.created_at.isoformat() if notification.created_at else None,
     }
@@ -135,6 +137,7 @@ def serialize_message(message) -> dict:
     return {
         "id": message.id,
         "match_id": message.match_id,
+        "claim_id": message.claim_id,
         "sender_id": message.sender_id,
         "sender_name": sender.name if sender else None,
         "body": message.body,

@@ -2996,10 +2996,15 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 [✓] Match messaging (GET/POST /matches/{id}/messages, /messages/read, GET /messages/unread-count;
      parties-only access, MESSAGE_RECEIVED notification with snippet, auto-advance to CONTACTED,
      per-match `unread_messages` badge on match lists)
+[✓] Claim conversations (GET/POST /claims/{id}/messages, /claims/{id}/messages/read — donor/owner
+     <-> requester thread on any claim incl. donations; parties-only, no claim status change,
+     per-claim `unread_messages` on /my-claims + /claims/received; unread-count counts both kinds)
+[✓] Notification deep-links (related_type/related_id on notifications; MATCH/CLAIM/REPORT set at
+     notify() call sites; serialize exposes both fields)
 [✓] Reporting API (user-facing create/mine + admin queue/review)
 [✓] Admin API (stats, users suspend/activate/role, listings moderation, claims, reports, global rebuild)
 [✓] Rate limiting / security hardening (sliding window, auth bucket, security headers, JSON 500)
-[✓] Backend test suite (47 pytest tests against findback_test database)
+[✓] Backend test suite (52 pytest tests against findback_test database)
 [✓] Health endpoint (GET /health)
 ```
 
@@ -3019,6 +3024,14 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 [✓] Matches UI (score breakdown, explanation + disclaimer, status updates)
 [✓] Match conversation UI (per-match thread with unread "N new" badge, chat bubbles,
      sender names, read receipts, reply box; opening a thread marks it read)
+[✓] Claim conversation UI (Dashboard claims tab: 💬 Conversation button + "N new" badge on both
+     "Claims I submitted" and "Claims on my listings"; shared Conversation component parameterized
+     by thread path `/matches/{id}` or `/claims/{id}`)
+[✓] Notification deep-link UI (cards clickable with "Open →"; marks read then navigates:
+     MESSAGE_RECEIVED → /matches?thread= or /dashboard?thread=, MATCH_FOUND → /matches?thread=,
+     CLAIM_* / DONATION_CLAIMED → /dashboard?thread=, LISTING_REPORTED → /admin, legacy rows
+     without related_id fall back to the list page; Matches/Dashboard read ?thread= and
+     auto-open + auto-read the conversation)
 [✓] Notifications UI (unread badge, mark read / mark all read; MESSAGE_RECEIVED type)
 [✓] Admin UI (stats, users moderation, listings, reports, claims; non-admin redirected)
 ```
@@ -3042,6 +3055,23 @@ B's sent bubble gained a "· read" receipt after A opened the thread. pytest now
 (5 new message tests: notify + status advance, read/unread flow, 403 for non-participants /
 401 unauthenticated, empty-body 422, same-owner no-self-notify).
 
+Donation claim conversations + notification deep-links added and browser-verified end-to-end
+on 2026-10-02 with two separate accounts: Priya Finder created donation #4 ("Desk Lamp"), UI
+Tester requested it from the detail page (new notice points to Dashboard → Claims), Priya's
+navbar badge rose with DONATION_CLAIMED (related CLAIM/10), UI Tester opened 💬 Conversation
+on the claim card and sent the first message → Priya received MESSAGE_RECEIVED
+(related CLAIM/10, snippet + "open the claim conversation for 'Desk Lamp...' to reply");
+clicking that notification navigated to `/dashboard?thread=10` with the Claims tab active and
+the thread auto-opened (badge cleared, incoming message auto-marked read, claim button showed
+"1 new" before opening). Priya replied, then approved the claim — UI Tester's CLAIM_APPROVED
+notification ("Coordinate with the owner…") deep-linked to the same thread, which now showed
+the APPROVED status, both bubbles, and a "· read" receipt on UI Tester's first message.
+Conversation remained available after approval (handover channel). Legacy notifications with
+NULL related_id still navigate to their list page. Console clean; pytest now 52/52
+(5 new claim-message tests: donor↔acceptor flow + deep-link fields, read/unread roundtrip,
+parties-only privacy 403/401/404 + admin read, approval deep-link + post-approval messaging,
+match MATCH_FOUND/MESSAGE_RECEIVED related fields).
+
 ## Database (live `findback` schema)
 
 ```text
@@ -3051,9 +3081,10 @@ B's sent bubble gained a "· read" receipt after A opened the thread. pytest now
 [✓] donations (new)
 [✓] claims (new)
 [✓] matches (new)
-[✓] notifications (new)
+[✓] notifications (new; added related_type / related_id deep-link columns — additive)
 [✓] reports (new)
-[✓] messages (new — match conversations; FK → matches, users)
+[✓] messages (new — match AND claim conversations; match_id NULL XOR claim_id set;
+     FK → matches, claims, users; claim_id + FK added by additive migration)
 ```
 
 ## Decisions log
@@ -3064,7 +3095,8 @@ B's sent bubble gained a "· read" receipt after A opened the thread. pytest now
 - **2026-10-02 — Phase order:** all backend phases (1–4, 7–14, 15–16) are implemented before the
   frontend phases (5–6) so the UI is built once against a stable, complete API.
 - **2026-10-02 — Migrations:** `create_tables.py` + `app/migrations.py` perform additive-only
-  schema changes (ALTER TABLE ADD COLUMN / CREATE INDEX) because Alembic is not yet adopted;
+  schema changes (ALTER TABLE ADD COLUMN / CREATE INDEX / ADD CONSTRAINT, plus a whitelisted
+  NOT NULL → NULL MODIFY that never drops data) because Alembic is not yet adopted;
   nothing is ever dropped or truncated (§57, §91).
 - **2026-10-02 — Response format:** list endpoints return `{items, total, page, limit, pages}`;
   mutations return `{message, ...}`; single-resource GET returns the resource object directly.
@@ -3075,7 +3107,19 @@ B's sent bubble gained a "· read" receipt after A opened the thread. pytest now
   admins) can read/write a thread; `is_read` means "read by the recipient"; the first message
   advances POTENTIAL/VIEWED → CONTACTED (never downgrades settled statuses); each message
   creates a MESSAGE_RECEIVED notification whose navbar badge needs no frontend change.
-  Claims keep their structured communication (message + verification answers + review note).
+  Claims keep their structured communication (message + verification answers + review note) —
+  later extended with free-form claim conversations (see below).
+- **2026-10-02 — Claim conversations + notification deep-links:** communication was extended to
+  donations/claims (donor/owner ↔ requester) by generalizing `messages` to a polymorphic thread:
+  `match_id` became nullable (whitelisted NOT NULL → NULL migration) and `claim_id` was added,
+  with exactly one set per row; the live `findback` DB got the column, index and FK constraint
+  via `ensure_schema` (all additive). Threads are claim-anchored (not donation-anchored) so each
+  claimant gets a private conversation with the donor — multiple claimants never see each other.
+  Party check reuses claim privacy (claimant + item owner + admins); no claim status changes on
+  messages (the approve/reject flow owns status), and conversations stay available after
+  approval as the handover channel. `notifications.related_type/related_id` (MATCH/CLAIM/REPORT)
+  let the UI navigate from a notification to the exact thread/page; rows without a related
+  target fall back to the list page. `notify()` still never raises (§68).
 
 ---
 

@@ -111,6 +111,8 @@ def create_claim(
             type=C.NOTIF_DONATION_CLAIMED,
             title=f"New request for '{item.name}'",
             message=f"{user.name} would like to receive your donation. Review the request to approve or reject it.",
+            related_type=C.RELATED_CLAIM,
+            related_id=claim.id,
         )
     else:
         notify(
@@ -119,6 +121,8 @@ def create_claim(
             type=C.NOTIF_CLAIM_RECEIVED,
             title=f"New claim on '{item.name}'",
             message=f"{user.name} submitted a claim. Review the verification details before deciding.",
+            related_type=C.RELATED_CLAIM,
+            related_id=claim.id,
         )
     return claim
 
@@ -151,6 +155,8 @@ def approve_claim(db: Session, claim: Claim, reviewer: User, note: str | None = 
         type=C.NOTIF_CLAIM_APPROVED,
         title=f"Claim approved for '{item.name}'",
         message="Your claim was approved. Coordinate with the owner to collect the item.",
+        related_type=C.RELATED_CLAIM,
+        related_id=claim.id,
     )
     return claim
 
@@ -173,6 +179,8 @@ def reject_claim(db: Session, claim: Claim, reviewer: User, note: str | None = N
         type=C.NOTIF_CLAIM_REJECTED,
         title=f"Claim not approved for '{item.name}'",
         message=note or "The listing owner did not approve your claim.",
+        related_type=C.RELATED_CLAIM,
+        related_id=claim.id,
     )
     return claim
 

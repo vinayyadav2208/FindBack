@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { Conversation } from '../components/messages'
 import { EmptyState, ErrorBanner, Spinner, SuccessBanner } from '../components/ui'
 import api, { errorMessage } from '../lib/api'
 import type { Claim, Donation, FoundItem, LostItem, Page } from '../lib/types'
@@ -8,7 +9,13 @@ import { claimColor, statusColor } from '../lib/types'
 type Tab = 'lost' | 'found' | 'donations' | 'claims'
 
 export default function Dashboard() {
-  const [tab, setTab] = useState<Tab>('lost')
+  const location = useLocation()
+  // notification deep link: /dashboard?thread=8 opens that claim conversation
+  const threadParam = new URLSearchParams(location.search).get('thread')
+  const threadId =
+    threadParam && !Number.isNaN(Number(threadParam)) ? Number(threadParam) : null
+  const [tab, setTab] = useState<Tab>(threadId ? 'claims' : 'lost')
+  const [openThread, setOpenThread] = useState<number | null>(threadId)
   const [lost, setLost] = useState<LostItem[]>([])
   const [found, setFound] = useState<FoundItem[]>([])
   const [donations, setDonations] = useState<Donation[]>([])
@@ -39,6 +46,19 @@ export default function Dashboard() {
   }, [])
 
   useEffect(load, [load])
+
+  // silent claims-only refresh: keeps an open conversation mounted
+  const refreshClaims = useCallback(() => {
+    Promise.all([
+      api.get<{ items: Claim[] }>('/my-claims'),
+      api.get<{ items: Claim[] }>('/claims/received'),
+    ])
+      .then(([mineRes, receivedRes]) => {
+        setMyClaims(mineRes.data.items)
+        setReceived(receivedRes.data.items)
+      })
+      .catch((caught) => setError(errorMessage(caught)))
+  }, [])
 
   const reviewClaim = async (claimId: number, action: 'approve' | 'reject') => {
     try {
@@ -215,10 +235,26 @@ export default function Dashboard() {
                       <span className={`badge ${claimColor(claim.status)}`}>{claim.status}</span>
                     </div>
                     <p className="mt-1 text-sm text-slate-600">{claim.message}</p>
-                    {claim.status === 'PENDING' && (
-                      <button className="btn-secondary mt-2" onClick={() => void cancelClaim(claim.id)}>
-                        Cancel claim
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      {claim.status === 'PENDING' && (
+                        <button className="btn-secondary" onClick={() => void cancelClaim(claim.id)}>
+                          Cancel claim
+                        </button>
+                      )}
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setOpenThread(openThread === claim.id ? null : claim.id)}
+                      >
+                        💬 Conversation
+                        {(claim.unread_messages ?? 0) > 0 && (
+                          <span className="badge bg-teal-100 text-teal-700">
+                            {claim.unread_messages} new
+                          </span>
+                        )}
                       </button>
+                    </div>
+                    {openThread === claim.id && (
+                      <Conversation path={`/claims/${claim.id}`} onChanged={refreshClaims} />
                     )}
                   </div>
                 ))}
@@ -260,6 +296,22 @@ export default function Dashboard() {
                           Reject
                         </button>
                       </div>
+                    )}
+                    <div className="mt-2">
+                      <button
+                        className="btn-secondary"
+                        onClick={() => setOpenThread(openThread === claim.id ? null : claim.id)}
+                      >
+                        💬 Conversation
+                        {(claim.unread_messages ?? 0) > 0 && (
+                          <span className="badge bg-teal-100 text-teal-700">
+                            {claim.unread_messages} new
+                          </span>
+                        )}
+                      </button>
+                    </div>
+                    {openThread === claim.id && (
+                      <Conversation path={`/claims/${claim.id}`} onChanged={refreshClaims} />
                     )}
                   </div>
                 ))}

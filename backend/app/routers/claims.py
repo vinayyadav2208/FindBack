@@ -18,10 +18,10 @@ from sqlalchemy.orm import Session, joinedload
 
 from app import constants as C
 from app.dependencies import get_current_user, get_db
-from app.models import Claim, Donation, FoundItem, LostItem, User
-from app.schemas import ClaimCreate, ClaimReview
-from app.services import claim_service
-from app.utils.helpers import serialize_claim
+from app.models import Claim, Donation, FoundItem, LostItem, Message, User
+from app.schemas import ClaimCreate, ClaimReview, MessageCreate
+from app.services import claim_service, message_service
+from app.utils.helpers import page_payload, paginate, serialize_claim, serialize_message
 
 router = APIRouter(tags=["Claims"])
 
@@ -81,7 +81,15 @@ def list_my_claims(
     if status:
         query = query.filter(Claim.status == status)
     claims = query.order_by(Claim.created_at.desc()).all()
-    return {"items": [serialize_claim(c) for c in claims], "total": len(claims)}
+    unread = message_service.unread_map(
+        db, user_id=current_user.id, column=Message.claim_id, thread_ids=[c.id for c in claims]
+    )
+    return {
+        "items": [
+            dict(serialize_claim(c), unread_messages=unread.get(c.id, 0)) for c in claims
+        ],
+        "total": len(claims),
+    }
 
 
 @router.get("/claims/received", summary="Claims on listings owned by the current user")
@@ -111,7 +119,15 @@ def list_received_claims(
             query = query.filter(Claim.status == status)
         rows.extend(query.all())
     rows.sort(key=lambda c: c.created_at or datetime.min, reverse=True)
-    return {"items": [serialize_claim(c) for c in rows], "total": len(rows)}
+    unread = message_service.unread_map(
+        db, user_id=current_user.id, column=Message.claim_id, thread_ids=[c.id for c in rows]
+    )
+    return {
+        "items": [
+            dict(serialize_claim(c), unread_messages=unread.get(c.id, 0)) for c in rows
+        ],
+        "total": len(rows),
+    }
 
 
 @router.get("/claims/{claim_id}", summary="Claim details (parties and admins only)")
@@ -159,3 +175,87 @@ def cancel_claim(
     claim = _load_claim(db, claim_id)
     claim = claim_service.cancel_claim(db, claim, current_user)
     return {"message": "Claim cancelled", "claim": serialize_claim(claim)}
+
+
+# =========================
+# CLAIM CONVERSATIONS (donor/owner <-> requester)
+# =========================
+
+def _require_claim_party(db: Session, claim: Claim, user: User) -> None:
+    if not _can_view(db, claim, user):
+        raise HTTPException(status_code=403, detail="You are not part of this claim")
+
+
+@router.get("/claims/{claim_id}/messages", summary="Conversation between owner and claimant")
+def list_claim_messages(
+    claim_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(100, ge=1, le=200),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    claim = _load_claim(db, claim_id)
+    _require_claim_party(db, claim, current_user)
+    query = (
+        db.query(Message)
+        .options(joinedload(Message.sender))
+        .filter(Message.claim_id == claim_id)
+        .order_by(Message.created_at.asc(), Message.id.asc())
+    )
+    items, total = paginate(query, page, limit)
+    return page_payload([serialize_message(m) for m in items], total, page, limit)
+
+
+@router.post(
+    "/claims/{claim_id}/messages",
+    status_code=201,
+    summary="Message the other party of a claim (donor <-> acceptor)",
+)
+def send_claim_message(
+    claim_id: int,
+    payload: MessageCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    claim = _load_claim(db, claim_id)
+    _require_claim_party(db, claim, current_user)
+
+    body = payload.body.strip()
+    if not body:
+        raise HTTPException(status_code=422, detail="Message body cannot be empty")
+
+    item = claim_service.get_claim_item(db, claim.item_type, claim.item_id)
+    message = message_service.create_message(
+        db, sender_id=current_user.id, claim_id=claim.id, body=body
+    )
+
+    # Both sides of the claim (minus the sender) get a deep-linked notice.
+    message_service.notify_new_message(
+        db,
+        sender=current_user,
+        recipients={item.user_id, claim.claimant_id},
+        body=body,
+        context=f"the claim conversation for '{item.name}'",
+        related_type=C.RELATED_CLAIM,
+        related_id=claim.id,
+    )
+
+    return {
+        "message": "Message sent",
+        "message_id": message.id,
+        "claim": serialize_claim(claim),
+    }
+
+
+@router.post("/claims/{claim_id}/messages/read", summary="Mark incoming messages as read")
+def read_claim_messages(
+    claim_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    claim = _load_claim(db, claim_id)
+    _require_claim_party(db, claim, current_user)
+    updated = message_service.mark_read(
+        db, user_id=current_user.id, column=Message.claim_id, thread_id=claim.id
+    )
+    return {"message": f"Marked {updated} message(s) as read", "updated": updated}

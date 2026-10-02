@@ -212,10 +212,11 @@ def find_matches(
 
             if notify_users:
                 confidence = explanation["confidence"]
-                _notify_match(db, source, candidate, confidence, item_type)
+                _notify_match(db, source, candidate, confidence, item_type, match=match)
                 _notify_match(
                     db, candidate, source, confidence,
                     "FOUND" if item_type == "LOST" else "LOST",
+                    match=match,
                 )
         else:
             existing.text_score = round(text, 4)
@@ -231,7 +232,9 @@ def find_matches(
     return results
 
 
-def _notify_match(db: Session, item, other, confidence: str, item_type: str) -> None:
+def _notify_match(
+    db: Session, item, other, confidence: str, item_type: str, match=None
+) -> None:
     kind = "lost" if item_type == "LOST" else "found"
     other_kind = "found" if item_type == "LOST" else "lost"
     notify(
@@ -244,6 +247,8 @@ def _notify_match(db: Session, item, other, confidence: str, item_type: str) -> 
             f"{kind} item report. {other.location}. Open Matches to review why - "
             "always verify ownership before arranging a handover."
         ),
+        related_type=C.RELATED_MATCH if match is not None else None,
+        related_id=match.id if match is not None else None,
     )
 
 
