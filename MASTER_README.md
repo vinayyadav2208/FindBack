@@ -2986,16 +2986,18 @@ Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
 [✓] Found item pagination, search, filters
 [✓] My found items (GET /my-found-items)
 [✓] Ownership enforcement: user_id always from JWT, 403 for non-owners, admin override
-[~] Search (list filters done; unified GET /search + GET /nearby endpoints in progress)
-[ ] Donations API
-[ ] Claims API
-[ ] AI text matching (embeddings, FAISS, match model, match API)
-[ ] AI image matching (upload, CLIP, combined score)
-[ ] Notifications API + unread count
-[ ] Reporting API
-[ ] Admin API + statistics
-[ ] Rate limiting / security hardening
-[ ] Backend test suite (pytest installed)
+[✓] Unified search (GET /search across LOST/FOUND/DONATION) + GET /nearby + GET /stats
+[✓] Donations API (CRUD, filters, my-donations, claim endpoint)
+[✓] Claims API (create/approve/reject/cancel, received, privacy, verification answers)
+[✓] AI text matching (embeddings with fallback backend, vector index abstraction, match explanations)
+[✓] Background matching on create/update + manual rebuild endpoints
+[✓] Image matching (magic-byte validated uploads, /media static, identical-image score, optional CLIP)
+[✓] Notifications API (list, unread-count, read, read-all) + creation on matches/claims/reports
+[✓] Reporting API (user-facing create/mine + admin queue/review)
+[✓] Admin API (stats, users suspend/activate/role, listings moderation, claims, reports, global rebuild)
+[✓] Rate limiting / security hardening (sliding window, auth bucket, security headers, JSON 500)
+[✓] Backend test suite (42 pytest tests against findback_test database)
+[✓] Health endpoint (GET /health)
 ```
 
 ## Frontend
