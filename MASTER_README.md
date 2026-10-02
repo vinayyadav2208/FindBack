@@ -2961,4 +2961,88 @@ Always prioritize security, maintainability, correctness, and a good user experi
 
 ---
 
+# PROJECT PROGRESS
+
+Maintained during development. Last updated: 2026-10-02
+
+Legend: `[✓]` complete · `[~]` partially complete · `[ ]` not started
+
+## Backend
+
+```text
+[✓] FastAPI setup (modular routers, CORS, structured logging, Swagger /docs)
+[✓] MySQL setup (existing `findback` database and data preserved)
+[✓] SQLAlchemy models (users, lost_items, found_items, donations, claims, matches, notifications, reports)
+[✓] Environment configuration (.env + .env.example, no secrets in code, config.py single source)
+[✓] Non-destructive schema migration (create_tables.py only ADDS missing columns/indexes)
+[✓] User registration (POST /users legacy + POST /auth/register)
+[✓] Password hashing (bcrypt)
+[✓] JWT login + JWT expiration (POST /login form + POST /auth/login JSON)
+[✓] Current user (GET /me) + suspended-account guard
+[✓] Lost item CRUD (POST/GET/PUT/DELETE /lost-items, GET /lost-items/{id})
+[✓] Lost item pagination, keyword search, category/location/status/date filters, distance filter
+[✓] My lost items (GET /my-lost-items)
+[✓] Found item CRUD (POST/GET/PUT/DELETE /found-items, GET /found-items/{id})
+[✓] Found item pagination, search, filters
+[✓] My found items (GET /my-found-items)
+[✓] Ownership enforcement: user_id always from JWT, 403 for non-owners, admin override
+[~] Search (list filters done; unified GET /search + GET /nearby endpoints in progress)
+[ ] Donations API
+[ ] Claims API
+[ ] AI text matching (embeddings, FAISS, match model, match API)
+[ ] AI image matching (upload, CLIP, combined score)
+[ ] Notifications API + unread count
+[ ] Reporting API
+[ ] Admin API + statistics
+[ ] Rate limiting / security hardening
+[ ] Backend test suite (pytest installed)
+```
+
+## Frontend
+
+```text
+[ ] React + TypeScript + Vite scaffold
+[ ] Tailwind CSS
+[ ] Routing + Navbar/Footer
+[ ] Auth context + Axios client + protected routes
+[ ] Home / Login / Register pages
+[ ] Dashboard
+[ ] Lost / Found listings + details + report forms
+[ ] My Listings / Profile
+[ ] Search & filters UI
+[ ] Donations UI
+[ ] Matches UI
+[ ] Notifications UI
+[ ] Admin UI
+```
+
+## Database (live `findback` schema)
+
+```text
+[✓] users (existing data preserved; added role, is_active, created_at, updated_at)
+[✓] lost_items (existing data preserved; added category, status, lat/lon, images, timestamps)
+[✓] found_items (added category, status, lat/lon, images, timestamps)
+[✓] donations (new)
+[✓] claims (new)
+[✓] matches (new)
+[✓] notifications (new)
+[✓] reports (new)
+```
+
+## Decisions log
+
+- **2026-10-02 — Project location:** existing backend from `Desktop\findback` was copied into
+  `opencodepj/backend` (original left untouched) so the repo root matches the structure in §7;
+  the existing venv is reused for running the app.
+- **2026-10-02 — Phase order:** all backend phases (1–4, 7–14, 15–16) are implemented before the
+  frontend phases (5–6) so the UI is built once against a stable, complete API.
+- **2026-10-02 — Migrations:** `create_tables.py` + `app/migrations.py` perform additive-only
+  schema changes (ALTER TABLE ADD COLUMN / CREATE INDEX) because Alembic is not yet adopted;
+  nothing is ever dropped or truncated (§57, §91).
+- **2026-10-02 — Response format:** list endpoints return `{items, total, page, limit, pages}`;
+  mutations return `{message, ...}`; single-resource GET returns the resource object directly.
+  Legacy response keys from the original implementation are preserved.
+
+---
+
 # END OF MASTER README

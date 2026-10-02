@@ -16,7 +16,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import engine
 from app.migrations import ensure_schema
-from app.routers import auth, found_items, home, lost_items
+from app.routers import auth, claims, donations, found_items, home, lost_items, search
 
 logging.basicConfig(
     level=logging.INFO,
@@ -69,3 +69,6 @@ app.include_router(home.router)
 app.include_router(auth.router)
 app.include_router(lost_items.router)
 app.include_router(found_items.router)
+app.include_router(donations.router)
+app.include_router(claims.router)
+app.include_router(search.router)
