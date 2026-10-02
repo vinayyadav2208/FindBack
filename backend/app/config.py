@@ -85,6 +85,7 @@ class Settings:
     GEMINI_API_KEY: str = _get("GEMINI_API_KEY", "")
     EMBEDDING_MODEL: str = _get("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
     MATCH_TOP_K: int = int(_get("MATCH_TOP_K", "10"))
+    MATCH_MIN_SCORE: float = float(_get("MATCH_MIN_SCORE", "0.35"))
 
     # Matching weights (MASTER_README §31)
     W_TEXT: float = float(_get("W_TEXT", "0.50"))

@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app import constants as C
 from app.dependencies import get_current_user, get_db
 from app.models import Claim, FoundItem, Match, User
 from app.schemas import FoundItemCreate, FoundItemUpdate
+from app.services.matching_service import run_matching_background
 from app.utils.helpers import page_payload, paginate, serialize_found_item
 from app.utils.query import apply_distance_box_filter, apply_item_filters, within_radius
 from app.utils.validators import require_owner_or_admin
@@ -91,6 +92,7 @@ def get_found_item(item_id: int, db: Session = Depends(get_db)):
 @router.post("/found-items", status_code=201, summary="Report a found item")
 def create_found_item(
     item_data: FoundItemCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -107,6 +109,9 @@ def create_found_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # AI matching runs in the background; failures never affect the listing (§68).
+    background_tasks.add_task(run_matching_background, "FOUND", item.id)
 
     return {
         "message": "Found item created successfully",
@@ -126,6 +131,7 @@ def create_found_item(
 def update_found_item(
     item_id: int,
     item_data: FoundItemUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -135,6 +141,10 @@ def update_found_item(
         setattr(item, field, value)
     db.commit()
     db.refresh(item)
+
+    if {"name", "description", "category", "location"} & set(updates):
+        background_tasks.add_task(run_matching_background, "FOUND", item.id)
+
     return {
         "message": "Found item updated successfully",
         "item": serialize_found_item(item),

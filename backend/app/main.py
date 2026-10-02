@@ -12,11 +12,25 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import engine
 from app.migrations import ensure_schema
-from app.routers import auth, claims, donations, found_items, home, lost_items, search
+from app.routers import (
+    admin,
+    auth,
+    claims,
+    donations,
+    found_items,
+    home,
+    lost_items,
+    matches,
+    notifications,
+    reports,
+    search,
+    uploads,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -30,6 +44,7 @@ async def lifespan(_: FastAPI):
     # Non-destructive schema sync on startup (§57, §91): only ADDs missing
     # tables/columns/indexes; never drops or truncates anything.
     ensure_schema(engine, logger=lambda message: logger.info(message))
+    settings.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     logger.info("Database schema is up to date")
     yield
 
@@ -72,3 +87,12 @@ app.include_router(found_items.router)
 app.include_router(donations.router)
 app.include_router(claims.router)
 app.include_router(search.router)
+app.include_router(matches.router)
+app.include_router(uploads.router)
+app.include_router(notifications.router)
+app.include_router(reports.router)
+app.include_router(admin.router)
+
+# Uploaded images are served back to the frontend from here.
+settings.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(settings.MEDIA_DIR)), name="media")

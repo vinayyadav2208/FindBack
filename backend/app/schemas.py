@@ -253,6 +253,17 @@ class ClaimOut(BaseModel):
 # MATCHES
 # =========================
 
+class MatchStatusUpdate(BaseModel):
+    status: str
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, value: str) -> str:
+        if value not in C.MATCH_STATUSES:
+            raise ValueError(f"Invalid status. Valid: {', '.join(C.MATCH_STATUSES)}")
+        return value
+
+
 class MatchOut(BaseModel):
     id: int
     lost_item_id: int

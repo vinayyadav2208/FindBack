@@ -7,13 +7,14 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from app import constants as C
 from app.dependencies import get_current_user, get_db
 from app.models import Claim, LostItem, Match, User
 from app.schemas import LostItemCreate, LostItemUpdate
+from app.services.matching_service import run_matching_background
 from app.utils.helpers import clamp_pagination, page_payload, paginate, serialize_lost_item
 from app.utils.query import apply_distance_box_filter, apply_item_filters, within_radius
 from app.utils.validators import require_owner_or_admin
@@ -94,6 +95,7 @@ def get_lost_item(item_id: int, db: Session = Depends(get_db)):
 @router.post("/lost-items", status_code=201, summary="Report a lost item")
 def create_lost_item(
     item_data: LostItemCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -110,6 +112,9 @@ def create_lost_item(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # AI matching runs in the background; failures never affect the listing (§68).
+    background_tasks.add_task(run_matching_background, "LOST", item.id)
 
     return {
         "message": "Lost item created successfully",
@@ -129,6 +134,7 @@ def create_lost_item(
 def update_lost_item(
     item_id: int,
     item_data: LostItemUpdate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -138,6 +144,11 @@ def update_lost_item(
         setattr(item, field, value)
     db.commit()
     db.refresh(item)
+
+    # Re-run matching when meaningful fields changed (§66: not on every view).
+    if {"name", "description", "category", "location"} & set(updates):
+        background_tasks.add_task(run_matching_background, "LOST", item.id)
+
     return {
         "message": "Lost item updated successfully",
         "item": serialize_lost_item(item),
