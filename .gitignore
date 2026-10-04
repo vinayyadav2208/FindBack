@@ -1,6 +1,10 @@
 # Environment / secrets
 .env
+.env.*
+!.env.example
 *.env.local
+frontend/.env
+!frontend/.env.example
 
 # Python
 __pycache__/
